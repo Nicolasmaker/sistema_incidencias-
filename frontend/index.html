@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Incidencias</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Sistema de Incidencias</h1>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2 id="form-title">Nueva incidencia</h2>
+      <form id="form-incidencia">
+        <input type="hidden" id="incidencia-id">
+
+        <label for="titulo">Título</label>
+        <input type="text" id="titulo" required>
+
+        <label for="descripcion">Descripción</label>
+        <textarea id="descripcion" required></textarea>
+
+        <label for="categoria">Categoría</label>
+        <input type="text" id="categoria">
+
+        <label for="prioridad">Prioridad</label>
+        <select id="prioridad">
+          <option value="BAJA">Baja</option>
+          <option value="MEDIA" selected>Media</option>
+          <option value="ALTA">Alta</option>
+        </select>
+
+        <label for="estado">Estado</label>
+        <select id="estado">
+          <option value="ABIERTA">Abierta</option>
+          <option value="EN_PROGRESO">En progreso</option>
+          <option value="RESUELTA">Resuelta</option>
+        </select>
+
+        <div class="acciones-form">
+          <button type="submit" id="btn-guardar">Guardar</button>
+          <button type="button" id="btn-cancelar" hidden>Cancelar</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Incidencias</h2>
+
+      <div class="filtros">
+        <input type="text" id="buscar" placeholder="Buscar por título...">
+        <select id="filtro-estado">
+          <option value="">Todos los estados</option>
+          <option value="ABIERTA">Abierta</option>
+          <option value="EN_PROGRESO">En progreso</option>
+          <option value="RESUELTA">Resuelta</option>
+        </select>
+      </div>
+
+      <p id="mensaje" class="mensaje" hidden></p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Título</th>
+            <th>Categoría</th>
+            <th>Prioridad</th>
+            <th>Estado</th>
+            <th>Fecha</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-incidencias"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
