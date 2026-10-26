@@ -30,11 +30,17 @@ variable "github_repo" {
 variable "frontend_bucket_name" {
   description = "Nombre único del bucket S3 para alojar el frontend estático"
   type        = string
-  default     = "sistema-incidencias-frontend-cahuinlab"
+  default     = "sistema-incidencias-frontend-788815135328"
 }
 
 variable "artifacts_bucket_name" {
   description = "Nombre del bucket S3 para artefactos cifrados de CodePipeline/CodeDeploy"
   type        = string
-  default     = "sistema-incidencias-artifacts-cahuinlab"
+  default     = "sistema-incidencias-artifacts-788815135328"
+}
+
+variable "is_aws_academy" {
+  description = "Activar si se ejecuta en una cuenta de estudiante AWS Academy / Learner Lab (usa LabRole)"
+  type        = bool
+  default     = true
 }
