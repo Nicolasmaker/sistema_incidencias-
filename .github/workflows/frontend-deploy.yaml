@@ -1,0 +1,40 @@
+name: "Frontend - Deploy a AWS S3"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-deploy.yaml'
+
+permissions:
+  id-token: write   # Autenticación federada OIDC
+  contents: read
+
+jobs:
+  deploy-frontend:
+    name: "Sincronizar Frontend con S3"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: 🔐 Autenticación en AWS (OIDC o Credenciales Temporales de Laboratorio)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+          audience: sts.amazonaws.com
+
+      - name: 🌐 Sincronizar archivos estáticos con el bucket S3
+        run: |
+          echo "Desplegando frontend a s3://${{ secrets.S3_FRONTEND_BUCKET }}..."
+          aws s3 sync ./frontend s3://${{ secrets.S3_FRONTEND_BUCKET }} --delete --region ${{ secrets.AWS_REGION }}
+
+      - name: ✅ Confirmación de Despliegue
+        run: echo "🎉 Frontend estático sincronizado correctamente en Amazon S3."
