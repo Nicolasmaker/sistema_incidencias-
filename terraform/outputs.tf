@@ -5,22 +5,22 @@
 
 output "frontend_bucket_id" {
   description = "Nombre del bucket S3 para alojamiento del frontend"
-  value       = aws_s3_bucket.frontend.id
+  value       = aws_cloudformation_stack.frontend_bucket.outputs["BucketId"]
 }
 
 output "frontend_bucket_arn" {
   description = "ARN del bucket S3 para alojamiento del frontend"
-  value       = aws_s3_bucket.frontend.arn
+  value       = aws_cloudformation_stack.frontend_bucket.outputs["BucketArn"]
 }
 
 output "artifacts_bucket_id" {
   description = "Nombre del bucket S3 para artefactos de CodePipeline"
-  value       = aws_s3_bucket.artifacts.id
+  value       = aws_cloudformation_stack.artifacts_bucket.outputs["BucketId"]
 }
 
 output "github_actions_role_arn" {
-  description = "ARN del Rol IAM para despliegues (LabRole en Academy u OIDC en Prod)"
-  value       = var.is_aws_academy ? data.aws_iam_role.lab_role[0].arn : aws_iam_role.github_actions_role[0].arn
+  description = "ARN del Rol IAM para despliegues (LabRole en Academy)"
+  value       = data.aws_iam_role.lab_role.arn
 }
 
 output "kms_key_arn" {
