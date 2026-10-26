@@ -11,6 +11,7 @@ const btnCancelar = document.getElementById("btn-cancelar");
 const formTitle = document.getElementById("form-title");
 const tabla = document.getElementById("tabla-incidencias");
 const buscarInput = document.getElementById("buscar");
+const filtroPrioridad = document.getElementById("filtro-prioridad");
 const filtroEstado = document.getElementById("filtro-estado");
 const mensaje = document.getElementById("mensaje");
 
@@ -30,13 +31,19 @@ function limpiarFormulario() {
 
 async function cargarIncidencias() {
   const params = new URLSearchParams();
-  if (filtroEstado.value) params.set("estado", filtroEstado.value);
-  if (buscarInput.value.trim()) params.set("search", buscarInput.value.trim());
+  if (filtroEstado && filtroEstado.value) params.set("estado", filtroEstado.value);
+  if (buscarInput && buscarInput.value.trim()) params.set("search", buscarInput.value.trim());
 
   try {
     const res = await fetch(`${API_URL}?${params.toString()}`);
     if (!res.ok) throw new Error("Error al cargar incidencias");
-    const incidencias = await res.json();
+    let incidencias = await res.json();
+    
+    // Filtrado por prioridad en cliente si está seleccionado
+    if (filtroPrioridad && filtroPrioridad.value) {
+      incidencias = incidencias.filter(inc => inc.prioridad === filtroPrioridad.value);
+    }
+
     renderTabla(incidencias);
   } catch (err) {
     mostrarMensaje(err.message, "error");
@@ -149,6 +156,7 @@ form.addEventListener("submit", async (e) => {
 
 btnCancelar.addEventListener("click", limpiarFormulario);
 buscarInput.addEventListener("input", cargarIncidencias);
+if (filtroPrioridad) filtroPrioridad.addEventListener("change", cargarIncidencias);
 filtroEstado.addEventListener("change", cargarIncidencias);
 
 cargarIncidencias();
