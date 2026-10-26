@@ -19,13 +19,13 @@ output "artifacts_bucket_id" {
 }
 
 output "github_actions_role_arn" {
-  description = "ARN del Rol IAM federado por OIDC para GitHub Actions"
-  value       = aws_iam_role.github_actions_role.arn
+  description = "ARN del Rol IAM para despliegues (LabRole en Academy u OIDC en Prod)"
+  value       = var.is_aws_academy ? data.aws_iam_role.lab_role[0].arn : aws_iam_role.github_actions_role[0].arn
 }
 
 output "kms_key_arn" {
-  description = "ARN de la clave KMS gestionada para cifrado de artefactos"
-  value       = aws_kms_key.artifacts_key.arn
+  description = "ARN de la clave KMS para cifrado de artefactos"
+  value       = local.kms_key_arn
 }
 
 output "codedeploy_app_name" {
