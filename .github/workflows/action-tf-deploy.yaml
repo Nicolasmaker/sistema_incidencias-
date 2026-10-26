@@ -1,0 +1,46 @@
+name: "Terraform - Apply & Deploy"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/action-tf-deploy.yaml'
+
+permissions:
+  id-token: write   # Autenticación federada OIDC con AWS
+  contents: read
+
+jobs:
+  tf-apply:
+    name: "Aplicar Cambios en Infraestructura (Producción)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: 🔐 Autenticación en AWS mediante GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+          audience: sts.amazonaws.com
+
+      - name: ⚙️ Configurar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: 🚀 Inicializar Terraform
+        working-directory: ./terraform
+        run: terraform init
+
+      - name: 🛡️ Aplicar Infraestructura (Auto-approve)
+        working-directory: ./terraform
+        run: terraform apply -auto-approve -no-color
+
+      - name: 📢 Notificación de Estado
+        if: success()
+        run: echo "🎉 Infraestructura aplicada y sincronizada en AWS exitosamente."
