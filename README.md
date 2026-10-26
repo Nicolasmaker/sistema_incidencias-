@@ -373,3 +373,27 @@ jobs:
 ### Reflexión Individual - Estudiante 2 (Nicolás)
 * **Contribución al proyecto:** Participé en la vinculación inicial del repositorio, el diseño de la arquitectura del microservicio de incidencias y la simulación del flujo colaborativo mediante la creación y revisión de Pull Requests para las ramas de features y hotfix.
 * **Aprendizaje obtenido:** Pude constatar la importancia de seguir estándares estrictos como Conventional Commits y la revisión por pares (*Code Review*) antes de integrar cualquier cambio. El uso de GitFlow junto con GitHub Actions proporciona un marco de trabajo ordenado que reduce la incertidumbre y mejora la colaboración en equipos de desarrollo orientados a la nube.
+
+---
+
+## 🚀 6. Lanzamiento de Versión (Release v1.0.0)
+
+Conforme a la estrategia GitFlow (**Módulo 1**), al completarse las funcionalidades en `develop`, se formaliza la rama de lanzamiento `release/v1.0.0` para estabilización, empaquetado y pase a producción.
+
+### Resumen del Lanzamiento
+* **Versión Oficial:** `v1.0.0` (SemVer)
+* **Microservicio Backend:** `com.sistemaIncidencias:grupo8:1.0.0` (Java 21 Temurin + Spring Boot 4 + JaCoCo 0.8.11).
+* **Frontend Web:** Interfaz responsiva desplegada en bucket de Amazon S3 (`sistema-incidencias-frontend-788815135328-sandbox`).
+* **Infraestructura como Código (Terraform):**
+  * Backend remoto en Amazon S3 con cifrado y control de concurrencia mediante Amazon DynamoDB (`sistema-incidencias-tf-locks`).
+  * Aplicación y grupo de despliegue en **AWS CodeDeploy** con hooks de ciclo de vida (`BeforeInstall`, `ApplicationStart`, `ValidateService`).
+  * Configuración parametrizada para compatibilidad nativa con **AWS Academy** (`LabRole`).
+* **Pipelines Automatizados:**
+  * `ci.yml`: Validación y compilación continua en PRs hacia `main` y `develop`.
+  * `action-tf-plan.yaml`: Generación y reporte automatizado de `terraform plan` en cada Pull Request.
+  * `action-tf-deploy.yaml`: Despliegue automático de infraestructura tras el merge en `main`.
+  * `frontend-deploy.yaml`: Sincronización continua de la interfaz web con Amazon S3.
+
+### Regla de Integración hacia `main` (GitFlow Estricto)
+* **Prohibición de Squash Merge:** La integración de `release/v1.0.0` hacia `main` y hacia `develop` se realiza preservando la totalidad del historial unitario y semántico, utilizando **Fast-Forward** o merge commit estándar.
+* **Tag de Producción:** Etiquetado inmutable `v1.0.0` sobre la rama `main`.
