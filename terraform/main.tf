@@ -1,12 +1,14 @@
 # ==============================================================================
 # Módulo 2 & 4: Infraestructura Principal y Seguridad (AWS)
 # Recursos de Cifrado KMS, Almacenamiento S3, OIDC GitHub y AWS CodeDeploy
+# Con soporte automático para cuentas de estudiante (AWS Academy / Learner Lab)
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
-# 1. Seguridad de Datos: Clave KMS para Cifrado en Reposo de Artefactos (Módulo 4)
+# 1. Seguridad de Datos: Cifrado en Reposo de Artefactos (Módulo 4)
 # ------------------------------------------------------------------------------
 resource "aws_kms_key" "artifacts_key" {
+  count                   = var.is_aws_academy ? 0 : 1
   description             = "Clave KMS para cifrado de artefactos CI/CD y buckets S3"
   deletion_window_in_days = 30
   enable_key_rotation     = true
@@ -17,8 +19,13 @@ resource "aws_kms_key" "artifacts_key" {
 }
 
 resource "aws_kms_alias" "artifacts_key_alias" {
+  count         = var.is_aws_academy ? 0 : 1
   name          = "alias/${var.project_name}-artifacts-key"
-  target_key_id = aws_kms_key.artifacts_key.key_id
+  target_key_id = aws_kms_key.artifacts_key[0].key_id
+}
+
+locals {
+  kms_key_arn = var.is_aws_academy ? "arn:aws:kms:us-east-1:788815135328:alias/aws/s3" : (length(aws_kms_key.artifacts_key) > 0 ? aws_kms_key.artifacts_key[0].arn : null)
 }
 
 # ------------------------------------------------------------------------------
@@ -39,7 +46,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "frontend_encrypti
 
   rule {
     apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.artifacts_key.arn
+      kms_master_key_id = local.kms_key_arn
       sse_algorithm     = "aws:kms"
     }
     bucket_key_enabled = true
@@ -81,7 +88,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts_encrypt
 
   rule {
     apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.artifacts_key.arn
+      kms_master_key_id = local.kms_key_arn
       sse_algorithm     = "aws:kms"
     }
     bucket_key_enabled = true
@@ -98,20 +105,28 @@ resource "aws_s3_bucket_public_access_block" "artifacts_access" {
 }
 
 # ------------------------------------------------------------------------------
-# 4. Federación de Identidad GitHub OIDC (Módulo 4: Sin claves estáticas)
+# 4. Gestión de Roles IAM: LabRole para AWS Academy vs OIDC para Producción (Módulo 4)
 # ------------------------------------------------------------------------------
+data "aws_iam_role" "lab_role" {
+  count = var.is_aws_academy ? 1 : 0
+  name  = "LabRole"
+}
+
 data "aws_iam_openid_connect_provider" "github" {
-  url = "https://token.actions.githubusercontent.com"
+  count = var.is_aws_academy ? 0 : 1
+  url   = "https://token.actions.githubusercontent.com"
 }
 
 data "aws_iam_policy_document" "github_oidc_assume_role" {
+  count = var.is_aws_academy ? 0 : 1
+
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
     effect  = "Allow"
 
     principals {
       type        = "Federated"
-      identifiers = [data.aws_iam_openid_connect_provider.github.arn]
+      identifiers = [data.aws_iam_openid_connect_provider.github[0].arn]
     }
 
     condition {
@@ -129,8 +144,9 @@ data "aws_iam_policy_document" "github_oidc_assume_role" {
 }
 
 resource "aws_iam_role" "github_actions_role" {
+  count              = var.is_aws_academy ? 0 : 1
   name               = "${var.project_name}-github-actions-role-${var.environment}"
-  assume_role_policy = data.aws_iam_policy_document.github_oidc_assume_role.json
+  assume_role_policy = data.aws_iam_policy_document.github_oidc_assume_role[0].json
 
   tags = {
     Name = "${var.project_name}-github-oidc-role"
@@ -138,6 +154,7 @@ resource "aws_iam_role" "github_actions_role" {
 }
 
 resource "aws_iam_policy" "github_actions_policy" {
+  count       = var.is_aws_academy ? 0 : 1
   name        = "${var.project_name}-github-actions-policy-${var.environment}"
   description = "Permisos mínimos necesarios para GitHub Actions (S3 Frontend y despliegues)"
 
@@ -165,22 +182,24 @@ resource "aws_iam_policy" "github_actions_policy" {
           "kms:Decrypt",
           "kms:GenerateDataKey"
         ]
-        Resource = [aws_kms_key.artifacts_key.arn]
+        Resource = [local.kms_key_arn]
       }
     ]
   })
 }
 
 resource "aws_iam_role_policy_attachment" "github_actions_attach" {
-  role       = aws_iam_role.github_actions_role.name
-  policy_arn = aws_iam_policy.github_actions_policy.arn
+  count      = var.is_aws_academy ? 0 : 1
+  role       = aws_iam_role.github_actions_role[0].name
+  policy_arn = aws_iam_policy.github_actions_policy[0].arn
 }
 
 # ------------------------------------------------------------------------------
 # 5. AWS CodeDeploy para Despliegue de Backend (Módulo 3)
 # ------------------------------------------------------------------------------
 resource "aws_iam_role" "codedeploy_service_role" {
-  name = "${var.project_name}-codedeploy-service-role-${var.environment}"
+  count = var.is_aws_academy ? 0 : 1
+  name  = "${var.project_name}-codedeploy-service-role-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -197,8 +216,9 @@ resource "aws_iam_role" "codedeploy_service_role" {
 }
 
 resource "aws_iam_role_policy_attachment" "codedeploy_role_attachment" {
+  count      = var.is_aws_academy ? 0 : 1
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
-  role       = aws_iam_role.codedeploy_service_role.name
+  role       = aws_iam_role.codedeploy_service_role[0].name
 }
 
 resource "aws_codedeploy_app" "backend_app" {
@@ -209,7 +229,7 @@ resource "aws_codedeploy_app" "backend_app" {
 resource "aws_codedeploy_deployment_group" "backend_deployment_group" {
   app_name              = aws_codedeploy_app.backend_app.name
   deployment_group_name = "${var.project_name}-backend-dg-${var.environment}"
-  service_role_arn      = aws_iam_role.codedeploy_service_role.arn
+  service_role_arn      = var.is_aws_academy ? data.aws_iam_role.lab_role[0].arn : aws_iam_role.codedeploy_service_role[0].arn
 
   deployment_style {
     deployment_option = "WITHOUT_TRAFFIC_CONTROL"
