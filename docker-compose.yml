@@ -1,0 +1,78 @@
+# ==============================================================================
+# Orquestación de Microservicios - Evaluación Parcial N°2 (IE1 & IE5)
+# Stack: Frontend (Nginx), Backend (Spring Boot 4 / Java 21) y Base de Datos (MySQL 8)
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Base de Datos Relacional (Persistencia con Volúmenes - RNF-02)
+  # ----------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: incidencias-mysql
+    restart: always
+    environment:
+      MYSQL_DATABASE: BD_INCIDENCIAS
+      MYSQL_USER: incidencia
+      MYSQL_PASSWORD: Incidencia_2026@
+      MYSQL_ROOT_PASSWORD: Root_Incidencia_2026@
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - incidencias-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pRoot_Incidencia_2026@"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ----------------------------------------------------------------------------
+  # 2. Microservicio Backend (Spring Boot 4 / Java 21)
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: incidencias-backend
+    restart: always
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/BD_INCIDENCIAS?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: incidencia
+      SPRING_DATASOURCE_PASSWORD: Incidencia_2026@
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - incidencias-net
+
+  # ----------------------------------------------------------------------------
+  # 3. Cliente Web Frontend (Servidor Web Nginx Ligero)
+  # ----------------------------------------------------------------------------
+  frontend:
+    image: nginx:alpine
+    container_name: incidencias-frontend
+    restart: always
+    ports:
+      - "8081:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
+    networks:
+      - incidencias-net
+
+# ------------------------------------------------------------------------------
+# Volúmenes y Redes Aisladas
+# ------------------------------------------------------------------------------
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  incidencias-net:
+    driver: bridge

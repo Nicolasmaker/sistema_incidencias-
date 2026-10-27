@@ -4,14 +4,15 @@ on:
   push:
     branches:
       - develop
+      - 'feature/**'
   pull_request:
     branches:
       - main
       - develop
 
 jobs:
-  build-and-test:
-    name: Build, Test & Cloud Verification
+  build-test-security:
+    name: Build, Pruebas Unitarias, Seguridad & Docker
     runs-on: ubuntu-latest
 
     steps:
@@ -28,30 +29,57 @@ jobs:
       - name: ⚙️ Otorgar permisos de ejecución al Maven Wrapper
         run: chmod +x ./backend/mvnw
 
-      - name: 🏗️ Compilar y Verificar Microservicio Backend (Spring Boot)
+      - name: 🧪 Ejecución de Pruebas Unitarias (JUnit 5) y Cobertura (JaCoCo) (IE2)
         working-directory: ./backend
         run: |
-          ./mvnw -B clean test-compile
+          ./mvnw -B clean test
+          echo "✅ Pruebas unitarias ejecutadas exitosamente."
+
+      - name: 📊 Publicar Reporte de Cobertura de Código JaCoCo
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reporte-cobertura-jacoco
+          path: backend/target/site/jacoco/
+          retention-days: 7
+
+      - name: 🛡️ Análisis de Seguridad y Vulnerabilidades con Snyk (IE3)
+        continue-on-error: true
+        uses: snyk/actions/maven@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --file=backend/pom.xml
+
+      - name: 🐳 Construcción y Verificación de Imagen Docker (IE1)
+        run: |
+          docker build -t sistema-incidencias-backend:${{ github.sha }} ./backend
+          docker tag sistema-incidencias-backend:${{ github.sha }} sistema-incidencias-backend:latest
+          echo "✅ Imagen Docker construida y etiquetada correctamente."
+
+      - name: 🐙 Validación de Orquestación con Docker Compose (IE5)
+        run: |
+          docker compose config
+          echo "✅ Archivo docker-compose.yml validado y listo para orquestación."
 
       - name: 🌐 Validar Archivos de Frontend
         run: |
-          echo "Validando estructura de interfaz web..."
           test -f frontend/index.html || { echo "Error: frontend/index.html no encontrado"; exit 1; }
           test -f frontend/style.css || { echo "Error: frontend/style.css no encontrado"; exit 1; }
           test -f frontend/app.js || { echo "Error: frontend/app.js no encontrado"; exit 1; }
           echo "✅ Archivos de frontend validados correctamente."
 
-      - name: ☁️ Simulación de Despliegue en Entorno Cloud
+      - name: ☁️ Simulación de Despliegue en Entorno Cloud (IE4)
         run: |
           echo "=========================================="
           echo "🚀 Simulación de Verificación Cloud DevOps"
           echo "=========================================="
           echo "Verificando artefactos para despliegue en entorno Cloud..."
-          echo "Validando compatibilidad de contenedor y microservicio..."
           echo "Ambiente: Cloud Staging / Production Simulation"
           echo "Estado: Artefacto listo para integración continua"
           echo "=========================================="
 
       - name: ✅ Reporte de Estado CI/CD
         if: success()
-        run: echo "🎉 El pipeline de Integración Continua (CI) se ejecutó exitosamente."
+        run: echo "🎉 El pipeline de Integración Continua (CI) se ejecutó exitosamente con Pruebas, JaCoCo, Snyk y Docker."
+

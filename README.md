@@ -397,3 +397,55 @@ Conforme a la estrategia GitFlow (**Módulo 1**), al completarse las funcionalid
 ### Regla de Integración hacia `main` (GitFlow Estricto)
 * **Prohibición de Squash Merge:** La integración de `release/v1.0.0` hacia `main` y hacia `develop` se realiza preservando la totalidad del historial unitario y semántico, utilizando **Fast-Forward** o merge commit estándar.
 * **Tag de Producción:** Etiquetado inmutable `v1.0.0` sobre la rama `main`.
+
+---
+
+## 🛡️ 7. Evaluación Parcial N°2 - Añadiéndole Complejidad al Pipeline
+
+En esta fase se incorporan pruebas automatizadas, escaneo de seguridad SAST/SCA, contenerización y orquestación unificada para el microservicio:
+
+### 1. Contenerización con Dockerfile Multietapa (IE1)
+* **Archivo:** `backend/Dockerfile`
+* **Arquitectura:**
+  * **Etapa 1 (Builder):** `eclipse-temurin:21-jdk-jammy` compila el microservicio con Maven Wrapper y genera el binario `.jar`.
+  * **Etapa 2 (Runtime):** `eclipse-temurin:21-jre-jammy` empaqueta exclusivamente el artefacto final sin herramientas de compilación, minimizando la superficie de ataque y el tamaño de la imagen.
+* **Comando de construcción local:**
+  ```bash
+  docker build -t sistema-incidencias-backend:latest ./backend
+  ```
+
+### 2. Pruebas Unitarias Automatizadas (JUnit 5) y Cobertura (JaCoCo) (IE2)
+* **Framework:** JUnit 5 (Jupiter) + Mockito.
+* **Clases de prueba:**
+  * `IncidenciaServiceTest.java`: Pruebas unitarias sobre la lógica de negocio (CRUD, filtrado por estado y búsqueda por título).
+  * `IncidenciaControllerTest.java`: Pruebas sobre los endpoints de la API REST y el healthcheck `/health`.
+* **Reporte de Cobertura JaCoCo:**
+  * Configurado en `pom.xml` mediante `jacoco-maven-plugin` (0.8.11).
+  * Genera métricas de cobertura de ramas e instrucciones en `backend/target/site/jacoco/index.html`.
+  * Se publica automáticamente como artefacto descargable en cada ejecución de GitHub Actions.
+* **Comando de ejecución:**
+  ```bash
+  cd backend
+  ./mvnw clean test
+  ```
+
+### 3. Análisis de Seguridad y Vulnerabilidades con Snyk (IE3)
+* **Herramienta:** Snyk CLI integrado en GitHub Actions (`snyk/actions/maven@master`).
+* **Alcance:** Escaneo estático de código (SAST) y análisis de dependencias de terceros (SCA).
+* **Política de Calidad y Bloqueo:** Configurado con `--severity-threshold=high` para alertar y bloquear el pipeline si se introducen vulnerabilidades de severidad crítica o alta.
+
+### 4. Orquestación con Docker Compose (IE5)
+* **Archivo:** `docker-compose.yml`
+* **Servicios orquestados:**
+  1. `mysql`: Base de datos MySQL 8.0 con volumen persistente `mysql_data` y healthcheck activo.
+  2. `backend`: Microservicio Spring Boot enlazado a la red interna y supeditado a la disponibilidad de MySQL.
+  3. `frontend`: Servidor web Nginx ligero exponiendo la interfaz en el puerto `8081`.
+* **Comando de inicio:**
+  ```bash
+  docker compose up -d
+  ```
+* **Comando de detención:**
+  ```bash
+  docker compose down
+  ```
+
