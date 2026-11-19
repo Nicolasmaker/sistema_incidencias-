@@ -16,7 +16,7 @@ echo "=================================================================="
 # 1. Escaneo de secretos en texto plano (codigo fuente, configs y k8s)
 # ------------------------------------------------------------------------------
 echo "[1/4] Verificando ausencia de secretos en texto plano..."
-SECRET_PATTERNS='(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH) PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|SPRING_DATASOURCE_PASSWORD\s*=\s*[^$\{[:space:]]+|spring\.datasource\.password\s*=\s*[^$\{[:space:]]+|MYSQL_ROOT_PASSWORD\s*:\s*[^$\{[:space:]]+)'
+SECRET_PATTERNS='(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH) PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|^[[:space:]]*(SPRING_DATASOURCE_PASSWORD|spring\.datasource\.password|MYSQL_PASSWORD|MYSQL_ROOT_PASSWORD)[[:space:]]*[:=][[:space:]]*[^$\{[:space:]]+)'
 
 # Buscar en backend/src, k8s (excluyendo *.example), frontend y docker-compose.yml
 MATCHES=$(grep -rnE "$SECRET_PATTERNS" \
