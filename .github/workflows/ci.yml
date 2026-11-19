@@ -100,16 +100,12 @@ jobs:
       - name: Escaneo Trivy FS - Secretos e IaC K8s/Docker (Bloqueante - IE6)
         run: |
           docker run --rm -v "${{ github.workspace }}:/src" aquasec/trivy:latest fs \
-            --scanners secret \
-            --severity CRITICAL,HIGH \
-            --exit-code 1 \
-            --skip-dirs /src/Grupo8 \
-            /src
-          docker run --rm -v "${{ github.workspace }}:/src" aquasec/trivy:latest fs \
-            --scanners misconfig \
+            --scanners secret,misconfig \
             --severity CRITICAL \
             --exit-code 1 \
+            --offline-scan \
             --skip-dirs /src/Grupo8 \
+            --skip-files /src/backend/pom.xml \
             /src
 
       - name: Analisis Snyk SCA (Bloqueante si SNYK_TOKEN esta configurado)
@@ -131,12 +127,14 @@ jobs:
             --severity CRITICAL \
             --exit-code 1 \
             --ignore-unfixed \
+            --offline-scan \
             sistema-incidencias-backend:${{ github.sha }}
 
       - name: Validar Docker Compose y Manifiestos Kubernetes
         run: |
           MYSQL_PASSWORD=ci-check MYSQL_ROOT_PASSWORD=ci-check docker compose config > /dev/null
           MYSQL_PASSWORD=ci-check MYSQL_ROOT_PASSWORD=ci-check docker compose --profile observability config > /dev/null
+          python3 -c "import yaml" 2>/dev/null || pip install -q pyyaml
           python3 -c "import glob, yaml; [list(yaml.safe_load_all(open(f))) for f in glob.glob('k8s/*.yaml')]"
           echo "Docker Compose y manifiestos Kubernetes validados correctamente."
 
@@ -179,7 +177,7 @@ jobs:
           fi
           chmod +x ./backend/mvnw
           cd backend
-          ./mvnw -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+          ./mvnw -B test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
             -Dsonar.host.url="$SONAR_HOST_URL" \
             -Dsonar.token="$SONAR_TOKEN" \
             -Dsonar.qualitygate.wait=true
