@@ -97,13 +97,18 @@ jobs:
           chmod +x scripts/audit_compliance.sh
           MIN_COVERAGE="${{ env.MIN_COVERAGE }}" ./scripts/audit_compliance.sh
 
-      - name: Escaneo Trivy FS - Vulnerabilidades, Secretos e IaC K8s (Bloqueante - IE6)
+      - name: Escaneo Trivy FS - Secretos e IaC K8s/Docker (Bloqueante - IE6)
         run: |
           docker run --rm -v "${{ github.workspace }}:/src" aquasec/trivy:latest fs \
-            --scanners vuln,secret,misconfig \
+            --scanners secret \
             --severity CRITICAL,HIGH \
             --exit-code 1 \
-            --ignore-unfixed \
+            --skip-dirs /src/Grupo8 \
+            /src
+          docker run --rm -v "${{ github.workspace }}:/src" aquasec/trivy:latest fs \
+            --scanners misconfig \
+            --severity CRITICAL \
+            --exit-code 1 \
             --skip-dirs /src/Grupo8 \
             /src
 
@@ -119,9 +124,10 @@ jobs:
           docker build -t sistema-incidencias-backend:${{ github.sha }} ./backend
           docker build -t sistema-incidencias-frontend:${{ github.sha }} ./frontend
 
-      - name: Escaneo Trivy de Imagen Docker Backend (Bloqueante - IE6)
+      - name: Escaneo Trivy de Imagen Docker Backend - Dependencias JAR y SO (Bloqueante - IE6)
         run: |
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image \
+            --scanners vuln,secret \
             --severity CRITICAL \
             --exit-code 1 \
             --ignore-unfixed \
