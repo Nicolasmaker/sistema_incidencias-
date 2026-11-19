@@ -98,15 +98,14 @@ jobs:
           MIN_COVERAGE="${{ env.MIN_COVERAGE }}" ./scripts/audit_compliance.sh
 
       - name: Escaneo Trivy FS - Vulnerabilidades, Secretos e IaC K8s (Bloqueante - IE6)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          scanners: 'vuln,secret,misconfig'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
-          ignore-unfixed: true
-          skip-dirs: 'Grupo8'
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/src" aquasec/trivy:latest fs \
+            --scanners vuln,secret,misconfig \
+            --severity CRITICAL,HIGH \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --skip-dirs /src/Grupo8 \
+            /src
 
       - name: Analisis Snyk SCA (Bloqueante si SNYK_TOKEN esta configurado)
         if: ${{ env.SNYK_AVAILABLE == 'true' }}
@@ -121,12 +120,12 @@ jobs:
           docker build -t sistema-incidencias-frontend:${{ github.sha }} ./frontend
 
       - name: Escaneo Trivy de Imagen Docker Backend (Bloqueante - IE6)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: 'sistema-incidencias-backend:${{ github.sha }}'
-          severity: 'CRITICAL'
-          exit-code: '1'
-          ignore-unfixed: true
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image \
+            --severity CRITICAL \
+            --exit-code 1 \
+            --ignore-unfixed \
+            sistema-incidencias-backend:${{ github.sha }}
 
       - name: Validar Docker Compose y Manifiestos Kubernetes
         run: |
