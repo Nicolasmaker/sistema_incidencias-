@@ -33,6 +33,7 @@
 		<tomcat.version>11.0.25</tomcat.version>
 		<spring-framework.version>7.0.9</spring-framework.version>
 		<sonar.projectKey>Nicolasmaker_sistema_incidencias-</sonar.projectKey>
+		<sonar.organization>nicolasmaker</sonar.organization>
 		<sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
 	</properties>
 	<dependencies>
