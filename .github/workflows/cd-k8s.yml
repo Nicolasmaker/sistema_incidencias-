@@ -1,0 +1,133 @@
+name: Despliegue Continuo a Kubernetes Cloud (CD) - EP3
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/nicolasmaker/sistema-incidencias-backend
+  FRONTEND_IMAGE: ghcr.io/nicolasmaker/sistema-incidencias-frontend
+
+jobs:
+  # ============================================================================
+  # 1. Validacion Pre-Despliegue (Bloqueante - IE6)
+  # ============================================================================
+  pre-deploy-gate:
+    name: Verificacion de Cumplimiento Pre-Despliegue
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Auditar cumplimiento antes de desplegar a produccion
+        run: |
+          chmod +x scripts/audit_compliance.sh
+          ./scripts/audit_compliance.sh
+
+  # ============================================================================
+  # 2. Build & Push de Imagenes a GHCR
+  # ============================================================================
+  build-and-push:
+    name: Build y Publicacion de Imagenes Docker
+    runs-on: ubuntu-latest
+    needs: pre-deploy-gate
+    outputs:
+      deploy_start: ${{ steps.start.outputs.ts }}
+    steps:
+      - id: start
+        run: echo "ts=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+
+      - name: Login en GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build y Push Backend
+        run: |
+          docker build -t ${{ env.BACKEND_IMAGE }}:${{ github.sha }} -t ${{ env.BACKEND_IMAGE }}:latest ./backend
+          docker push ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          docker push ${{ env.BACKEND_IMAGE }}:latest
+
+      - name: Build y Push Frontend
+        run: |
+          docker build -t ${{ env.FRONTEND_IMAGE }}:${{ github.sha }} -t ${{ env.FRONTEND_IMAGE }}:latest ./frontend
+          docker push ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          docker push ${{ env.FRONTEND_IMAGE }}:latest
+
+  # ============================================================================
+  # 3. Despliegue Automatizado en Kubernetes Cloud con Observabilidad (IE2)
+  # ============================================================================
+  deploy-kubernetes:
+    name: Deploy Automatizado en Cluster Kubernetes
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configurar acceso al cluster Kubernetes (KUBECONFIG)
+        env:
+          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          if [ -z "$KUBECONFIG_DATA" ]; then
+            echo "::error::Secret KUBECONFIG_B64 no configurado. Agreguelo en Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_DATA" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+          kubectl cluster-info
+
+      - name: Crear/Actualizar Secretos de Base de Datos en K8s
+        env:
+          MYSQL_USER: ${{ secrets.MYSQL_USER }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+        run: |
+          kubectl apply -f k8s/00-namespaces.yaml
+          kubectl create secret generic incidencias-secrets \
+            --namespace incidencias \
+            --from-literal=MYSQL_USER="${MYSQL_USER}" \
+            --from-literal=MYSQL_PASSWORD="${MYSQL_PASSWORD}" \
+            --from-literal=MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD}" \
+            --from-literal=MYSQL_EXPORTER_DSN="${MYSQL_USER}:${MYSQL_PASSWORD}@(localhost:3306)/" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Aplicar Manifiestos de Microservicios y Observabilidad (Kustomize)
+        run: |
+          kubectl apply -k k8s/
+          kubectl -n incidencias set image deployment/incidencias-backend backend=${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          kubectl -n incidencias set image deployment/incidencias-frontend frontend=${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+
+      - name: Verificar Rollout Exitoso
+        run: |
+          kubectl -n incidencias rollout status deployment/incidencias-backend --timeout=180s
+          kubectl -n incidencias rollout status deployment/incidencias-frontend --timeout=120s
+          kubectl -n observability rollout status deployment/prometheus --timeout=120s
+          kubectl -n observability rollout status deployment/grafana --timeout=120s
+
+      - name: Registrar Tiempo de Despliegue en Prometheus Pushgateway (IE3)
+        env:
+          PUSHGATEWAY_URL: ${{ secrets.PUSHGATEWAY_URL }}
+          DEPLOY_START: ${{ needs.build-and-push.outputs.deploy_start }}
+        run: |
+          END_TS=$(date +%s)
+          DEPLOY_DURATION=$(( END_TS - DEPLOY_START ))
+          echo "Tiempo total de despliegue en Kubernetes: ${DEPLOY_DURATION}s"
+          if [ -n "$PUSHGATEWAY_URL" ]; then
+            cat <<EOF | curl -fsS --data-binary @- "${PUSHGATEWAY_URL}/metrics/job/github_actions_cd"
+            # TYPE cicd_deploy_duration_seconds gauge
+            cicd_deploy_duration_seconds{environment="kubernetes-cloud"} ${DEPLOY_DURATION}
+            EOF
+          fi

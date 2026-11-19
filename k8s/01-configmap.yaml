@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: incidencias-config
+  namespace: incidencias
+data:
+  MYSQL_DATABASE: "BD_INCIDENCIAS"
+  SPRING_DATASOURCE_URL: "jdbc:mysql://mysql.incidencias.svc.cluster.local:3306/BD_INCIDENCIAS?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+  APP_ENVIRONMENT: "kubernetes-cloud"
+  DDL_AUTO: "update"
+  LOG_FORMAT: "ecs"
+  LOG_LEVEL_ROOT: "INFO"
+  LOG_LEVEL_APP: "INFO"

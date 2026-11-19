@@ -449,3 +449,18 @@ En esta fase se incorporan pruebas automatizadas, escaneo de seguridad SAST/SCA,
   docker compose down
   ```
 
+---
+
+## 📊 8. Evaluación Parcial N°3 - Observabilidad, Kubernetes Cloud y Cumplimiento
+
+La extensión completa del pipeline para la **Evaluación Parcial N°3** (observabilidad con Prometheus/Loki/Grafana, despliegue automatizado en Kubernetes en la nube, dashboards con métricas CI/CD, políticas de cumplimiento con SonarQube/Trivy/auditoría y Quality Gates bloqueantes) está documentada en detalle en:
+
+- 👉 **[Documentación Integral EP3 — Observabilidad y Cumplimiento](docs/evaluacion_parcial_3_observabilidad.md)**
+
+### Inicio rápido con Stack de Observabilidad
+```bash
+cp .env.example .env
+docker compose --profile observability up -d --build
+```
+
+

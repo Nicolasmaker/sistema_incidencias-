@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: incidencias-frontend
+  namespace: incidencias
+  labels:
+    app: incidencias-frontend
+    tier: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: incidencias-frontend
+  template:
+    metadata:
+      labels:
+        app: incidencias-frontend
+        tier: web
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9113"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+      containers:
+        - name: frontend
+          image: ghcr.io/nicolasmaker/sistema-incidencias-frontend:latest
+          imagePullPolicy: Always
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 8081
+              name: status
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+        - name: nginx-exporter
+          image: nginx/nginx-prometheus-exporter:1.3.0
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            allowPrivilegeEscalation: false
+          args:
+            - "--nginx.scrape-uri=http://127.0.0.1:8081/stub_status"
+          ports:
+            - containerPort: 9113
+              name: metrics
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: incidencias-frontend
+  namespace: incidencias
+  labels:
+    app: incidencias-frontend
+spec:
+  type: LoadBalancer
+  selector:
+    app: incidencias-frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+    - name: metrics
+      port: 9113
+      targetPort: 9113
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: incidencias-ingress
+  namespace: incidencias
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: incidencias-backend
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: incidencias-frontend
+                port:
+                  number: 80

@@ -1,0 +1,58 @@
+# ==============================================================================
+# Reglas de Alerta de Observabilidad y Calidad (IE1 & IE3)
+# ==============================================================================
+groups:
+  - name: disponibilidad_microservicios
+    rules:
+      - alert: MicroservicioCaido
+        expr: up{job=~"backend|frontend|mysql"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Microservicio {{ $labels.job }} no disponible"
+          description: "El servicio {{ $labels.job }} ({{ $labels.instance }}) lleva mas de 1 minuto caido."
+
+  - name: errores_y_rendimiento
+    rules:
+      - alert: AltaTasaErroresHTTP5xx
+        expr: |
+          (sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+          / clamp_min(sum(rate(http_server_requests_seconds_count[5m])), 1)) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tasa de errores HTTP 5xx superior al 5%"
+          description: "El backend esta respondiendo con errores 5xx por encima del umbral tolerado."
+
+      - alert: UsoAltoMemoriaJVM
+        expr: |
+          (sum(jvm_memory_used_bytes{area="heap"})
+          / sum(jvm_memory_max_bytes{area="heap"})) > 0.85
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uso de memoria JVM Heap superior al 85%"
+          description: "Considere escalar replicas (HPA) o revisar fugas de memoria en el backend."
+
+      - alert: UsoAltoCPUBackend
+        expr: process_cpu_usage > 0.80
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uso de CPU del backend superior al 80%"
+          description: "El consumo de CPU supera el 80% de forma sostenida."
+
+  - name: calidad_cicd
+    rules:
+      - alert: CoberturaPruebasBajoUmbral
+        expr: cicd_test_coverage_percent < 60
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cobertura de pruebas JaCoCo por debajo del 60%"
+          description: "La ultima ejecucion CI reporto una cobertura de {{ $value }}%."
