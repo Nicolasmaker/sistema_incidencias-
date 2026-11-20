@@ -1,13 +1,9 @@
 # ==============================================================================
-# Orquestacion de Microservicios + Stack de Observabilidad (EP2 & EP3)
-# Uso basico:       docker compose up -d
-# Con monitoreo:    docker compose --profile observability up -d
+# Orquestacion Local de Microservicios - Sistema de Gestion de Incidencias
+# En la nube se despliega con Amazon ECS Fargate + Amazon ECR + AWS CloudWatch
 # ==============================================================================
 
 services:
-  # ----------------------------------------------------------------------------
-  # 1. Base de Datos Relacional (MySQL 8.0)
-  # ----------------------------------------------------------------------------
   mysql:
     image: mysql:8.0
     container_name: incidencias-mysql
@@ -30,9 +26,6 @@ services:
       retries: 5
       start_period: 30s
 
-  # ----------------------------------------------------------------------------
-  # 2. Microservicio Backend (Spring Boot 4 / Java 21 + Actuator/Prometheus)
-  # ----------------------------------------------------------------------------
   backend:
     build:
       context: ./backend
@@ -53,9 +46,6 @@ services:
     networks:
       - incidencias-net
 
-  # ----------------------------------------------------------------------------
-  # 3. Cliente Web Frontend (Nginx Unprivileged + /healthz + /stub_status)
-  # ----------------------------------------------------------------------------
   frontend:
     build:
       context: ./frontend
@@ -69,114 +59,8 @@ services:
     networks:
       - incidencias-net
 
-  # ============================================================================
-  # STACK DE OBSERVABILIDAD (Perfil: observability - IE1 & IE3)
-  # ============================================================================
-  nginx-exporter:
-    image: nginx/nginx-prometheus-exporter:1.3.0
-    container_name: incidencias-nginx-exporter
-    profiles: ["observability"]
-    command:
-      - "--nginx.scrape-uri=http://frontend:8081/stub_status"
-    depends_on:
-      - frontend
-    networks:
-      - incidencias-net
-
-  mysql-exporter:
-    image: prom/mysqld-exporter:v0.15.1
-    container_name: incidencias-mysql-exporter
-    profiles: ["observability"]
-    environment:
-      DATA_SOURCE_NAME: "${MYSQL_USER:-incidencia}:${MYSQL_PASSWORD:-changeme}@(mysql:3306)/"
-    depends_on:
-      mysql:
-        condition: service_healthy
-    networks:
-      - incidencias-net
-
-  pushgateway:
-    image: prom/pushgateway:v1.9.0
-    container_name: incidencias-pushgateway
-    profiles: ["observability"]
-    ports:
-      - "9091:9091"
-    networks:
-      - incidencias-net
-
-  prometheus:
-    image: prom/prometheus:v2.54.1
-    container_name: incidencias-prometheus
-    profiles: ["observability"]
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.retention.time=15d"
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./observability/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
-      - prometheus_data:/prometheus
-    depends_on:
-      - backend
-      - pushgateway
-    networks:
-      - incidencias-net
-
-  loki:
-    image: grafana/loki:3.1.1
-    container_name: incidencias-loki
-    profiles: ["observability"]
-    command: -config.file=/etc/loki/local-config.yaml
-    ports:
-      - "3100:3100"
-    volumes:
-      - ./observability/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
-    networks:
-      - incidencias-net
-
-  promtail:
-    image: grafana/promtail:3.1.1
-    container_name: incidencias-promtail
-    profiles: ["observability"]
-    command: -config.file=/etc/promtail/config.yml
-    volumes:
-      - ./observability/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    depends_on:
-      - loki
-    networks:
-      - incidencias-net
-
-  grafana:
-    image: grafana/grafana:11.2.0
-    container_name: incidencias-grafana
-    profiles: ["observability"]
-    ports:
-      - "3000:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      GF_USERS_ALLOW_SIGN_UP: "false"
-    volumes:
-      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - grafana_data:/var/lib/grafana
-    depends_on:
-      - prometheus
-      - loki
-    networks:
-      - incidencias-net
-
-# ------------------------------------------------------------------------------
-# Volumenes y Redes Aisladas
-# ------------------------------------------------------------------------------
 volumes:
   mysql_data:
-    driver: local
-  prometheus_data:
-    driver: local
-  grafana_data:
     driver: local
 
 networks:
