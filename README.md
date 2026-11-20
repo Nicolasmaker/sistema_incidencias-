@@ -451,16 +451,15 @@ En esta fase se incorporan pruebas automatizadas, escaneo de seguridad SAST/SCA,
 
 ---
 
-## 📊 8. Evaluación Parcial N°3 - Observabilidad, Kubernetes Cloud y Cumplimiento
+## 📊 8. Evaluación Parcial N°3 - Amazon ECS Fargate, ECR, AWS CloudWatch y Cumplimiento
 
-La extensión completa del pipeline para la **Evaluación Parcial N°3** (observabilidad con Prometheus/Loki/Grafana, despliegue automatizado en Kubernetes en la nube, dashboards con métricas CI/CD, políticas de cumplimiento con SonarQube/Trivy/auditoría y Quality Gates bloqueantes) está documentada en detalle en:
+La extensión completa del pipeline para la **Evaluación Parcial N°3** (despliegue automatizado en **Amazon ECS Fargate + Service Connect**, registro de imágenes en **Amazon ECR**, observabilidad nativa en **AWS CloudWatch + SNS**, políticas de cumplimiento con **SonarCloud / Trivy / auditoría** y Quality Gates bloqueantes) está documentada en detalle en:
 
-- 👉 **[Documentación Integral EP3 — Observabilidad y Cumplimiento](docs/evaluacion_parcial_3_observabilidad.md)**
+- 👉 **[Documentación Integral EP3 — AWS CloudWatch, ECS Fargate y Cumplimiento](docs/evaluacion_parcial_3_observabilidad.md)**
 
-### Inicio rápido con Stack de Observabilidad
+### Despliegue rápido en AWS (ECS + ECR + CloudWatch)
 ```bash
-cp .env.example .env
-docker compose --profile observability up -d --build
+./scripts/deploy_ecs_aws.sh
 ```
 
 

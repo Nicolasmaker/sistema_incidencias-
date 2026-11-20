@@ -1,0 +1,54 @@
+{
+  "family": "incidencias-backend",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::__AWS_ACCOUNT_ID__:role/LabRole",
+  "taskRoleArn": "arn:aws:iam::__AWS_ACCOUNT_ID__:role/LabRole",
+  "containerDefinitions": [
+    {
+      "name": "backend",
+      "image": "__BACKEND_IMAGE__",
+      "essential": true,
+      "portMappings": [
+        {
+          "name": "http",
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp",
+          "appProtocol": "http"
+        }
+      ],
+      "environment": [
+        {
+          "name": "SPRING_DATASOURCE_URL",
+          "value": "jdbc:mysql://mysql:3306/BD_INCIDENCIAS?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+        },
+        { "name": "SPRING_DATASOURCE_USERNAME", "value": "__MYSQL_USER__" },
+        { "name": "SPRING_DATASOURCE_PASSWORD", "value": "__MYSQL_PASSWORD__" },
+        { "name": "APP_ENVIRONMENT", "value": "aws-ecs-fargate" },
+        { "name": "DDL_AUTO", "value": "update" },
+        { "name": "LOG_FORMAT", "value": "ecs" }
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf \"GET /actuator/health/liveness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3 && grep -q 200 <&3' || exit 1"
+        ],
+        "interval": 20,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 45
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/incidencias",
+          "awslogs-region": "__AWS_REGION__",
+          "awslogs-stream-prefix": "backend"
+        }
+      }
+    }
+  ]
+}
