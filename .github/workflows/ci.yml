@@ -175,12 +175,19 @@ jobs:
             echo "::warning::SONAR_TOKEN no configurado en GitHub Secrets. Configure SONAR_TOKEN para activar el Quality Gate remoto de SonarCloud/SonarQube."
             exit 0
           fi
+          # SonarCloud Free Plan permite consultar Quality Gate en main y Pull Requests,
+          # pero restringe el endpoint en pushes directos a ramas secundarias.
+          QG_WAIT="false"
+          if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.ref_name }}" = "main" ]; then
+            QG_WAIT="true"
+          fi
+          echo "SonarCloud Quality Gate Wait: ${QG_WAIT} (evento=${{ github.event_name }}, rama=${{ github.ref_name }})"
           chmod +x ./backend/mvnw
           cd backend
-          ./mvnw -B test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+          ./mvnw -B test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:5.9.0.7382:sonar \
             -Dsonar.host.url="$SONAR_HOST_URL" \
             -Dsonar.token="$SONAR_TOKEN" \
-            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.wait="$QG_WAIT"
 
   # ============================================================================
   # JOB 4: Publicacion de Metricas CI/CD a Prometheus Pushgateway (IE3)
