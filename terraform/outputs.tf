@@ -13,6 +13,11 @@ output "frontend_bucket_arn" {
   value       = aws_cloudformation_stack.frontend_bucket.outputs["BucketArn"]
 }
 
+output "frontend_website_url" {
+  description = "URL pública de acceso al sitio web estático alojado en Amazon S3"
+  value       = "http://${aws_cloudformation_stack.frontend_bucket.outputs["BucketId"]}.s3-website-us-east-1.amazonaws.com"
+}
+
 output "artifacts_bucket_id" {
   description = "Nombre del bucket S3 para artefactos de CodePipeline"
   value       = aws_cloudformation_stack.artifacts_bucket.outputs["BucketId"]

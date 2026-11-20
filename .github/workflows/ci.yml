@@ -1,57 +1,244 @@
-name: Integración Continua (CI) - Pipeline DevOps
+name: Integracion Continua y Cumplimiento (CI / DevSecOps) - EP3
 
 on:
   push:
     branches:
+      - main
       - develop
+      - 'feature/**'
+      - 'test/**'
   pull_request:
     branches:
       - main
       - develop
 
+env:
+  MIN_COVERAGE: "50"
+
 jobs:
-  build-and-test:
-    name: Build, Test & Cloud Verification
+  # ============================================================================
+  # JOB 1: Build, Pruebas Unitarias y Cobertura JaCoCo (IE2 / IE3 / IE6)
+  # ============================================================================
+  build-test-coverage:
+    name: Build, JUnit 5 & Cobertura JaCoCo
     runs-on: ubuntu-latest
+    outputs:
+      coverage: ${{ steps.calc-coverage.outputs.coverage }}
+      start_time: ${{ steps.timer.outputs.start_time }}
 
     steps:
-      - name: 📥 Clonar repositorio (Checkout)
-        uses: actions/checkout@v4
+      - name: Registrar tiempo de inicio
+        id: timer
+        run: echo "start_time=$(date +%s)" >> "$GITHUB_OUTPUT"
 
-      - name: ☕ Configurar Java JDK 21 (Temurin)
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Java JDK 21 (Temurin)
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: 'maven'
 
-      - name: ⚙️ Otorgar permisos de ejecución al Maven Wrapper
+      - name: Otorgar permisos al Maven Wrapper
         run: chmod +x ./backend/mvnw
 
-      - name: 🏗️ Compilar y Verificar Microservicio Backend (Spring Boot)
+      - name: Ejecutar pruebas unitarias y generar reporte JaCoCo
         working-directory: ./backend
-        run: |
-          ./mvnw -B clean test-compile
+        run: ./mvnw -B clean test
 
-      - name: 🌐 Validar Archivos de Frontend
+      - name: Calcular cobertura JaCoCo
+        id: calc-coverage
         run: |
-          echo "Validando estructura de interfaz web..."
-          test -f frontend/index.html || { echo "Error: frontend/index.html no encontrado"; exit 1; }
-          test -f frontend/style.css || { echo "Error: frontend/style.css no encontrado"; exit 1; }
-          test -f frontend/app.js || { echo "Error: frontend/app.js no encontrado"; exit 1; }
-          echo "✅ Archivos de frontend validados correctamente."
+          COV=$(python3 - backend/target/site/jacoco/jacoco.xml <<'EOF'
+          import sys, xml.etree.ElementTree as ET
+          root = ET.parse(sys.argv[1]).getroot()
+          for c in root.findall("counter"):
+              if c.attrib.get("type") == "INSTRUCTION":
+                  m, cov = int(c.attrib["missed"]), int(c.attrib["covered"])
+                  print(f"{(cov * 100.0 / (m + cov)) if (m + cov) else 0:.2f}")
+                  break
+          EOF
+          )
+          echo "coverage=${COV}" >> "$GITHUB_OUTPUT"
+          echo "Cobertura JaCoCo: ${COV}%"
 
-      - name: ☁️ Simulación de Despliegue en Entorno Cloud
+      - name: Publicar artefacto JaCoCo
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reporte-cobertura-jacoco
+          path: backend/target/site/jacoco/
+          retention-days: 7
+
+  # ============================================================================
+  # JOB 2: Politicas de Cumplimiento y Auditoria Bloqueante (IE5 & IE6)
+  # ============================================================================
+  security-and-compliance:
+    name: Quality Gates de Seguridad, Auditoria & Contenedores
+    runs-on: ubuntu-latest
+    needs: build-test-coverage
+
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Descargar reporte JaCoCo
+        uses: actions/download-artifact@v4
+        with:
+          name: reporte-cobertura-jacoco
+          path: backend/target/site/jacoco/
+
+      - name: Ejecutar Script de Auditoria de Cumplimiento (Bloqueante - IE5/IE6)
         run: |
-          echo "=========================================="
-          echo "🚀 Simulación de Verificación Cloud DevOps"
-          echo "=========================================="
-          echo "Verificando artefactos para despliegue en entorno Cloud..."
-          echo "Validando compatibilidad de contenedor y microservicio..."
-          echo "Ambiente: Cloud Staging / Production Simulation"
-          echo "Estado: Artefacto listo para integración continua"
-          echo "=========================================="
+          chmod +x scripts/audit_compliance.sh
+          MIN_COVERAGE="${{ env.MIN_COVERAGE }}" ./scripts/audit_compliance.sh
 
-      - name: ✅ Reporte de Estado CI/CD
-        if: success()
-        run: echo "🎉 El pipeline de Integración Continua (CI) se ejecutó exitosamente."
+      - name: Escaneo Trivy FS - Secretos e IaC K8s/Docker (Bloqueante - IE6)
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/src" aquasec/trivy:latest fs \
+            --scanners secret,misconfig \
+            --severity CRITICAL \
+            --exit-code 1 \
+            --offline-scan \
+            --skip-dirs /src/Grupo8 \
+            --skip-files /src/backend/pom.xml \
+            /src
+
+      - name: Analisis Snyk SCA (Bloqueante si SNYK_TOKEN esta configurado)
+        if: ${{ env.SNYK_AVAILABLE == 'true' }}
+        env:
+          SNYK_AVAILABLE: ${{ secrets.SNYK_TOKEN != '' }}
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: npx -y snyk test --severity-threshold=high --file=backend/pom.xml
+
+      - name: Construir imagenes Docker (Backend y Frontend)
+        run: |
+          docker build -t sistema-incidencias-backend:${{ github.sha }} ./backend
+          docker build -t sistema-incidencias-frontend:${{ github.sha }} ./frontend
+
+      - name: Escaneo Trivy de Imagen Docker Backend - Dependencias JAR y SO (Bloqueante - IE6)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image \
+            --scanners vuln,secret \
+            --severity CRITICAL \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --offline-scan \
+            sistema-incidencias-backend:${{ github.sha }}
+
+      - name: Validar Docker Compose y Manifiestos Kubernetes
+        run: |
+          MYSQL_PASSWORD=ci-check MYSQL_ROOT_PASSWORD=ci-check docker compose config > /dev/null
+          MYSQL_PASSWORD=ci-check MYSQL_ROOT_PASSWORD=ci-check docker compose --profile observability config > /dev/null
+          python3 -c "import yaml" 2>/dev/null || pip install -q pyyaml
+          python3 -c "import glob, yaml; [list(yaml.safe_load_all(open(f))) for f in glob.glob('k8s/*.yaml')]"
+          echo "Docker Compose y manifiestos Kubernetes validados correctamente."
+
+  # ============================================================================
+  # JOB 3: SonarQube / SonarCloud Quality Gate (IE5 & IE6)
+  # ============================================================================
+  sonarqube-quality-gate:
+    name: SonarQube / SonarCloud Quality Gate
+    runs-on: ubuntu-latest
+    needs: build-test-coverage
+    if: ${{ vars.ENABLE_SONAR != 'false' }}
+
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Java JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Descargar reporte JaCoCo
+        uses: actions/download-artifact@v4
+        with:
+          name: reporte-cobertura-jacoco
+          path: backend/target/site/jacoco/
+
+      - name: Ejecutar Analisis SonarQube con Quality Gate Bloqueante
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL || 'https://sonarcloud.io' }}
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "::warning::SONAR_TOKEN no configurado en GitHub Secrets. Configure SONAR_TOKEN para activar el Quality Gate remoto de SonarCloud/SonarQube."
+            exit 0
+          fi
+          # SonarCloud Free Plan permite consultar Quality Gate en main y Pull Requests,
+          # pero restringe el endpoint en pushes directos a ramas secundarias.
+          QG_WAIT="false"
+          if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.ref_name }}" = "main" ]; then
+            QG_WAIT="true"
+          fi
+          echo "SonarCloud Quality Gate Wait: ${QG_WAIT} (evento=${{ github.event_name }}, rama=${{ github.ref_name }})"
+          chmod +x ./backend/mvnw
+          cd backend
+          ./mvnw -B test-compile org.sonarsource.scanner.maven:sonar-maven-plugin:5.9.0.7382:sonar \
+            -Dsonar.host.url="$SONAR_HOST_URL" \
+            -Dsonar.token="$SONAR_TOKEN" \
+            -Dsonar.qualitygate.wait="$QG_WAIT"
+
+  # ============================================================================
+  # JOB 4: Publicacion de Metricas CI/CD a Prometheus Pushgateway (IE3)
+  # ============================================================================
+  publish-cicd-metrics:
+    name: Publicar Metricas CI/CD y Resumen
+    runs-on: ubuntu-latest
+    needs: [build-test-coverage, security-and-compliance, sonarqube-quality-gate]
+    if: always()
+
+    steps:
+      - name: Calcular metricas y publicar en Dashboard / Pushgateway
+        env:
+          PUSHGATEWAY_URL: ${{ secrets.PUSHGATEWAY_URL }}
+          COVERAGE: ${{ needs.build-test-coverage.outputs.coverage || '0' }}
+          START_TIME: ${{ needs.build-test-coverage.outputs.start_time || '0' }}
+          SEC_RESULT: ${{ needs.security-and-compliance.result }}
+          SONAR_RESULT: ${{ needs.sonarqube-quality-gate.result }}
+        run: |
+          END_TIME=$(date +%s)
+          DURATION=$(( END_TIME - START_TIME ))
+          if [ "$START_TIME" -eq 0 ]; then DURATION=0; fi
+
+          PIPELINE_OK=1
+          if [ "$SEC_RESULT" != "success" ] || [ "$SONAR_RESULT" = "failure" ]; then
+            PIPELINE_OK=0
+          fi
+
+          cat <<EOF > cicd_metrics.prom
+          # TYPE cicd_deploy_duration_seconds gauge
+          cicd_deploy_duration_seconds{branch="${GITHUB_REF_NAME}"} ${DURATION}
+          # TYPE cicd_test_coverage_percent gauge
+          cicd_test_coverage_percent{branch="${GITHUB_REF_NAME}"} ${COVERAGE}
+          # TYPE cicd_pipeline_status gauge
+          cicd_pipeline_status{branch="${GITHUB_REF_NAME}"} ${PIPELINE_OK}
+          EOF
+
+          if [ -n "$PUSHGATEWAY_URL" ]; then
+            curl -fsS --data-binary @cicd_metrics.prom "${PUSHGATEWAY_URL}/metrics/job/github_actions_ci"
+            echo "Metricas enviadas a Pushgateway."
+          else
+            echo "PUSHGATEWAY_URL no configurado; metricas registradas en Job Summary."
+          fi
+
+          {
+            echo "## Resumen de Metricas CI/CD y Cumplimiento (EP3)"
+            echo "| Metrica | Valor |"
+            echo "| :--- | :--- |"
+            echo "| **Duracion del Pipeline** | \`${DURATION}s\` |"
+            echo "| **Cobertura de Pruebas (JaCoCo)** | \`${COVERAGE}%\` (minimo: ${MIN_COVERAGE}%) |"
+            echo "| **Quality Gate Seguridad y Auditoria** | \`${SEC_RESULT}\` |"
+            echo "| **SonarQube Quality Gate** | \`${SONAR_RESULT}\` |"
+            echo "| **Estado Final (1=Aprobado / 0=Bloqueado)** | \`${PIPELINE_OK}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
