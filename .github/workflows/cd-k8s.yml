@@ -89,7 +89,7 @@ jobs:
           chmod 600 ~/.kube/config
           kubectl cluster-info
 
-      - name: Crear/Actualizar Secretos de Base de Datos en K8s
+      - name: Crear/Actualizar Secretos de Base de Datos y GHCR en K8s
         env:
           MYSQL_USER: ${{ secrets.MYSQL_USER }}
           MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
@@ -103,6 +103,13 @@ jobs:
             --from-literal=MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD}" \
             --from-literal=MYSQL_EXPORTER_DSN="${MYSQL_USER}:${MYSQL_PASSWORD}@(localhost:3306)/" \
             --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret docker-registry ghcr-secret \
+            --namespace incidencias \
+            --docker-server=ghcr.io \
+            --docker-username="${{ github.actor }}" \
+            --docker-password="${{ secrets.GITHUB_TOKEN }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n incidencias patch serviceaccount default -p '{"imagePullSecrets": [{"name": "ghcr-secret"}]}'
 
       - name: Aplicar Manifiestos de Microservicios y Observabilidad (Kustomize)
         run: |

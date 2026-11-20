@@ -84,7 +84,7 @@ metadata:
   labels:
     app: incidencias-frontend
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: incidencias-frontend
   ports:

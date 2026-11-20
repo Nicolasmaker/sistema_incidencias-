@@ -128,6 +128,7 @@ metadata:
   name: prometheus
   namespace: observability
 spec:
+  type: LoadBalancer
   selector:
     app: prometheus
   ports:
@@ -179,11 +180,29 @@ metadata:
   name: pushgateway
   namespace: observability
 spec:
+  type: LoadBalancer
   selector:
     app: pushgateway
   ports:
     - port: 9091
       targetPort: 9091
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: observability
+data:
+  datasources.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus
+        access: proxy
+        url: http://prometheus.observability.svc.cluster.local:9090
+        isDefault: true
+        editable: true
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -229,6 +248,13 @@ spec:
               path: /api/health
               port: 3000
             initialDelaySeconds: 10
+          volumeMounts:
+            - name: grafana-datasources
+              mountPath: /etc/grafana/provisioning/datasources
+      volumes:
+        - name: grafana-datasources
+          configMap:
+            name: grafana-datasources
 ---
 apiVersion: v1
 kind: Service
