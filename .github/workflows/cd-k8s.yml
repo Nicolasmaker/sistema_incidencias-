@@ -126,8 +126,7 @@ jobs:
           DEPLOY_DURATION=$(( END_TS - DEPLOY_START ))
           echo "Tiempo total de despliegue en Kubernetes: ${DEPLOY_DURATION}s"
           if [ -n "$PUSHGATEWAY_URL" ]; then
-            cat <<EOF | curl -fsS --data-binary @- "${PUSHGATEWAY_URL}/metrics/job/github_actions_cd"
-            # TYPE cicd_deploy_duration_seconds gauge
-            cicd_deploy_duration_seconds{environment="kubernetes-cloud"} ${DEPLOY_DURATION}
-            EOF
+            printf '# TYPE cicd_deploy_duration_seconds gauge\ncicd_deploy_duration_seconds{environment="kubernetes-cloud"} %s\n' "${DEPLOY_DURATION}" \
+              | curl -fsS --data-binary @- "${PUSHGATEWAY_URL}/metrics/job/github_actions_cd"
+            echo "Metrica cicd_deploy_duration_seconds enviada a Pushgateway."
           fi
