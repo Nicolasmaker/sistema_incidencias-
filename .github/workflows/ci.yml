@@ -14,6 +14,7 @@ on:
 
 env:
   MIN_COVERAGE: "50"
+  AWS_REGION: "us-east-1"
 
 jobs:
   # ============================================================================
@@ -97,7 +98,7 @@ jobs:
           chmod +x scripts/audit_compliance.sh
           MIN_COVERAGE="${{ env.MIN_COVERAGE }}" ./scripts/audit_compliance.sh
 
-      - name: Escaneo Trivy FS - Secretos e IaC K8s/Docker (Bloqueante - IE6)
+      - name: Escaneo Trivy FS - Secretos e IaC ECS/Docker (Bloqueante - IE6)
         run: |
           docker run --rm -v "${{ github.workspace }}:/src" aquasec/trivy:latest fs \
             --scanners secret,misconfig \
@@ -117,8 +118,8 @@ jobs:
 
       - name: Construir imagenes Docker (Backend y Frontend)
         run: |
-          docker build -t sistema-incidencias-backend:${{ github.sha }} ./backend
-          docker build -t sistema-incidencias-frontend:${{ github.sha }} ./frontend
+          docker build -t incidencias-backend:${{ github.sha }} ./backend
+          docker build -t incidencias-frontend:${{ github.sha }} ./frontend
 
       - name: Escaneo Trivy de Imagen Docker Backend - Dependencias JAR y SO (Bloqueante - IE6)
         run: |
@@ -128,15 +129,12 @@ jobs:
             --exit-code 1 \
             --ignore-unfixed \
             --offline-scan \
-            sistema-incidencias-backend:${{ github.sha }}
+            incidencias-backend:${{ github.sha }}
 
-      - name: Validar Docker Compose y Manifiestos Kubernetes
+      - name: Validar Docker Compose y Definiciones Amazon ECS / CloudWatch
         run: |
           MYSQL_PASSWORD=ci-check MYSQL_ROOT_PASSWORD=ci-check docker compose config > /dev/null
-          MYSQL_PASSWORD=ci-check MYSQL_ROOT_PASSWORD=ci-check docker compose --profile observability config > /dev/null
-          python3 -c "import yaml" 2>/dev/null || pip install -q pyyaml
-          python3 -c "import glob, yaml; [list(yaml.safe_load_all(open(f))) for f in glob.glob('k8s/*.yaml')]"
-          echo "Docker Compose y manifiestos Kubernetes validados correctamente."
+          python3 -c "import glob, json; [json.load(open(f)) for f in glob.glob('ecs/*.json')]; print('Task Definitions y Dashboard CloudWatch JSON OK')"
 
   # ============================================================================
   # JOB 3: SonarQube / SonarCloud Quality Gate (IE5 & IE6)
@@ -172,11 +170,9 @@ jobs:
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL || 'https://sonarcloud.io' }}
         run: |
           if [ -z "$SONAR_TOKEN" ]; then
-            echo "::warning::SONAR_TOKEN no configurado en GitHub Secrets. Configure SONAR_TOKEN para activar el Quality Gate remoto de SonarCloud/SonarQube."
+            echo "::warning::SONAR_TOKEN no configurado en GitHub Secrets."
             exit 0
           fi
-          # SonarCloud Free Plan permite consultar Quality Gate en main y Pull Requests,
-          # pero restringe el endpoint en pushes directos a ramas secundarias.
           QG_WAIT="false"
           if [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.ref_name }}" = "main" ]; then
             QG_WAIT="true"
@@ -190,18 +186,20 @@ jobs:
             -Dsonar.qualitygate.wait="$QG_WAIT"
 
   # ============================================================================
-  # JOB 4: Publicacion de Metricas CI/CD a Prometheus Pushgateway (IE3)
+  # JOB 4: Publicacion de Metricas CI/CD a AWS CloudWatch Metrics (IE3)
   # ============================================================================
   publish-cicd-metrics:
-    name: Publicar Metricas CI/CD y Resumen
+    name: Publicar Metricas CI/CD en AWS CloudWatch y Resumen
     runs-on: ubuntu-latest
     needs: [build-test-coverage, security-and-compliance, sonarqube-quality-gate]
     if: always()
 
     steps:
-      - name: Calcular metricas y publicar en Dashboard / Pushgateway
+      - name: Publicar metricas en AWS CloudWatch (si hay credenciales AWS activas)
         env:
-          PUSHGATEWAY_URL: ${{ secrets.PUSHGATEWAY_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
           COVERAGE: ${{ needs.build-test-coverage.outputs.coverage || '0' }}
           START_TIME: ${{ needs.build-test-coverage.outputs.start_time || '0' }}
           SEC_RESULT: ${{ needs.security-and-compliance.result }}
@@ -212,28 +210,26 @@ jobs:
           if [ "$START_TIME" -eq 0 ]; then DURATION=0; fi
 
           PIPELINE_OK=1
+          VULNS=0
           if [ "$SEC_RESULT" != "success" ] || [ "$SONAR_RESULT" = "failure" ]; then
             PIPELINE_OK=0
+            VULNS=1
           fi
 
-          cat <<EOF > cicd_metrics.prom
-          # TYPE cicd_deploy_duration_seconds gauge
-          cicd_deploy_duration_seconds{branch="${GITHUB_REF_NAME}"} ${DURATION}
-          # TYPE cicd_test_coverage_percent gauge
-          cicd_test_coverage_percent{branch="${GITHUB_REF_NAME}"} ${COVERAGE}
-          # TYPE cicd_pipeline_status gauge
-          cicd_pipeline_status{branch="${GITHUB_REF_NAME}"} ${PIPELINE_OK}
-          EOF
-
-          if [ -n "$PUSHGATEWAY_URL" ]; then
-            curl -fsS --data-binary @cicd_metrics.prom "${PUSHGATEWAY_URL}/metrics/job/github_actions_ci"
-            echo "Metricas enviadas a Pushgateway."
+          if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+            aws cloudwatch put-metric-data --region "${AWS_REGION}" --namespace "Incidencias/CICD" \
+              --metric-data \
+                "MetricName=DeployDurationSeconds,Value=${DURATION},Unit=Seconds" \
+                "MetricName=TestCoveragePercent,Value=${COVERAGE},Unit=Percent" \
+                "MetricName=SecurityVulnerabilities,Value=${VULNS},Unit=Count" \
+                "MetricName=QualityGateStatus,Value=${PIPELINE_OK},Unit=Count" \
+              || echo "::warning::No se pudo enviar metricas a CloudWatch (posible token temporal de AWS Academy expirado)."
           else
-            echo "PUSHGATEWAY_URL no configurado; metricas registradas en Job Summary."
+            echo "Credenciales AWS no configuradas en Secrets; metricas registradas en Job Summary."
           fi
 
           {
-            echo "## Resumen de Metricas CI/CD y Cumplimiento (EP3)"
+            echo "## Resumen de Metricas CI/CD y Cumplimiento — AWS CloudWatch (EP3)"
             echo "| Metrica | Valor |"
             echo "| :--- | :--- |"
             echo "| **Duracion del Pipeline** | \`${DURATION}s\` |"

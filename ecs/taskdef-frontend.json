@@ -1,0 +1,40 @@
+{
+  "family": "incidencias-frontend",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::__AWS_ACCOUNT_ID__:role/LabRole",
+  "taskRoleArn": "arn:aws:iam::__AWS_ACCOUNT_ID__:role/LabRole",
+  "containerDefinitions": [
+    {
+      "name": "frontend",
+      "image": "__FRONTEND_IMAGE__",
+      "essential": true,
+      "portMappings": [
+        {
+          "name": "http",
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp",
+          "appProtocol": "http"
+        }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz || exit 1"],
+        "interval": 15,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 15
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/incidencias",
+          "awslogs-region": "__AWS_REGION__",
+          "awslogs-stream-prefix": "frontend"
+        }
+      }
+    }
+  ]
+}

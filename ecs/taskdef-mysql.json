@@ -1,0 +1,45 @@
+{
+  "family": "incidencias-mysql",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::__AWS_ACCOUNT_ID__:role/LabRole",
+  "taskRoleArn": "arn:aws:iam::__AWS_ACCOUNT_ID__:role/LabRole",
+  "containerDefinitions": [
+    {
+      "name": "mysql",
+      "image": "mysql:8.0",
+      "essential": true,
+      "portMappings": [
+        {
+          "name": "mysql",
+          "containerPort": 3306,
+          "hostPort": 3306,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "MYSQL_DATABASE", "value": "BD_INCIDENCIAS" },
+        { "name": "MYSQL_USER", "value": "__MYSQL_USER__" },
+        { "name": "MYSQL_PASSWORD", "value": "__MYSQL_PASSWORD__" },
+        { "name": "MYSQL_ROOT_PASSWORD", "value": "__MYSQL_ROOT_PASSWORD__" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$MYSQL_ROOT_PASSWORD || exit 1"],
+        "interval": 15,
+        "timeout": 5,
+        "retries": 5,
+        "startPeriod": 30
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/incidencias",
+          "awslogs-region": "__AWS_REGION__",
+          "awslogs-stream-prefix": "mysql"
+        }
+      }
+    }
+  ]
+}

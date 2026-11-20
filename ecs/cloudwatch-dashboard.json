@@ -1,0 +1,120 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Uso de CPU (%) — ECS Fargate (Container Insights)",
+        "region": "us-east-1",
+        "stat": "Average",
+        "period": 60,
+        "metrics": [
+          ["AWS/ECS", "CPUUtilization", "ClusterName", "incidencias-ecs", "ServiceName", "incidencias-backend"],
+          [".", ".", ".", ".", ".", "incidencias-frontend"],
+          [".", ".", ".", ".", ".", "mysql"]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Uso de Memoria (%) — ECS Fargate (Container Insights)",
+        "region": "us-east-1",
+        "stat": "Average",
+        "period": 60,
+        "metrics": [
+          ["AWS/ECS", "MemoryUtilization", "ClusterName", "incidencias-ecs", "ServiceName", "incidencias-backend"],
+          [".", ".", ".", ".", ".", "incidencias-frontend"],
+          [".", ".", ".", ".", ".", "mysql"]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Trafico y Errores HTTP 4XX/5XX — Service Connect Mesh",
+        "region": "us-east-1",
+        "stat": "Sum",
+        "period": 60,
+        "metrics": [
+          ["AWS/ECS", "RequestCount", "ClusterName", "incidencias-ecs", "TargetDiscoveryName", "incidencias-backend"],
+          [".", "HTTPCode_Target_4XX_Count", ".", ".", ".", "incidencias-backend"],
+          [".", "HTTPCode_Target_5XX_Count", ".", ".", ".", "incidencias-backend"]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Latencia de Respuesta (TargetResponseTime) — Service Connect",
+        "region": "us-east-1",
+        "stat": "Average",
+        "period": 60,
+        "metrics": [
+          ["AWS/ECS", "TargetResponseTime", "ClusterName", "incidencias-ecs", "TargetDiscoveryName", "incidencias-backend"]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 12,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Metricas CI/CD: Tiempo de Despliegue (s) y Cobertura JaCoCo (%)",
+        "region": "us-east-1",
+        "stat": "Maximum",
+        "period": 300,
+        "metrics": [
+          ["Incidencias/CICD", "DeployDurationSeconds"],
+          [".", "TestCoveragePercent"]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 12,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "title": "Cumplimiento CI/CD: Quality Gate (1=OK) y Vulnerabilidades Criticas",
+        "region": "us-east-1",
+        "stat": "Maximum",
+        "period": 300,
+        "metrics": [
+          ["Incidencias/CICD", "QualityGateStatus"],
+          [".", "SecurityVulnerabilities"]
+        ]
+      }
+    },
+    {
+      "type": "log",
+      "x": 0,
+      "y": 18,
+      "width": 24,
+      "height": 6,
+      "properties": {
+        "title": "Logs Centralizados de Microservicios (/ecs/incidencias)",
+        "region": "us-east-1",
+        "query": "SOURCE '/ecs/incidencias' | fields @timestamp, @logStream, @message | sort @timestamp desc | limit 50"
+      }
+    }
+  ]
+}
