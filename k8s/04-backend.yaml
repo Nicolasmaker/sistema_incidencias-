@@ -7,15 +7,15 @@ metadata:
     app: incidencias-backend
     tier: application
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: incidencias-backend
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
+      maxUnavailable: 1
+      maxSurge: 0
   template:
     metadata:
       labels:
@@ -58,11 +58,11 @@ spec:
                   key: MYSQL_PASSWORD
           resources:
             requests:
-              cpu: "250m"
-              memory: "384Mi"
+              cpu: "100m"
+              memory: "256Mi"
             limits:
-              cpu: "750m"
-              memory: "768Mi"
+              cpu: "500m"
+              memory: "640Mi"
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
@@ -106,8 +106,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: incidencias-backend
-  minReplicas: 2
-  maxReplicas: 5
+  minReplicas: 1
+  maxReplicas: 3
   metrics:
     - type: Resource
       resource:
