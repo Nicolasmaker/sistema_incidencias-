@@ -44,7 +44,9 @@ services:
       mysql:
         condition: service_healthy
     networks:
-      - incidencias-net
+      incidencias-net:
+        aliases:
+          - incidencias-backend
 
   frontend:
     build:
