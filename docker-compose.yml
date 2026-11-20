@@ -84,7 +84,7 @@ services:
       - incidencias-net
 
   mysql-exporter:
-    image: prom/mysqld-exporter:v0.15.1
+    image: prom/mysqld-exporter:v0.14.0
     container_name: incidencias-mysql-exporter
     profiles: ["observability"]
     environment:
